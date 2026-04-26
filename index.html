@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no" />
+<meta name="theme-color" content="#10b981" />
+<title>歩数チャレンジ</title>
+<link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+P+One&family=Kosugi+Maru&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box}html,body{margin:0;padding:0;height:100%;overflow:hidden}
+body{font-family:"Kosugi Maru",system-ui,sans-serif;color:#064e3b;background:linear-gradient(180deg,#bbf7d0,#10b981);touch-action:manipulation;user-select:none;-webkit-tap-highlight-color:transparent}
+#app{display:flex;flex-direction:column;height:100dvh;padding:14px;gap:10px;max-width:480px;margin:0 auto;align-items:center}
+.title{font-family:"Mochiy Pop P One",sans-serif;font-size:24px;color:#fff;-webkit-text-stroke:3px #064e3b;paint-order:stroke fill;text-shadow:3px 3px 0 #047857;margin:8px 0}
+.big-card{flex:1;width:100%;background:#fff;border:3px solid #064e3b;border-radius:18px;padding:18px;box-shadow:4px 4px 0 #064e3b;display:flex;flex-direction:column;align-items:center;gap:10px}
+.steps{font-family:"Mochiy Pop P One",sans-serif;font-size:64px;color:#10b981;-webkit-text-stroke:3px #064e3b;paint-order:stroke fill;line-height:1;margin-top:8px}
+.steps small{font-size:18px}
+.bar{width:100%;height:24px;background:#d1fae5;border:2px solid #064e3b;border-radius:999px;overflow:hidden;position:relative}
+.bar-fill{height:100%;background:linear-gradient(90deg,#10b981,#fbbf24);width:0;transition:width .3s}
+.bar-text{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold}
+.goal-row{display:flex;gap:6px;width:100%}
+.goal-row button{flex:1;background:#fff;border:2px solid #064e3b;padding:6px;font-size:11px;cursor:pointer;border-radius:8px;font-family:inherit}
+.goal-row button.on{background:#10b981;color:#fff}
+.calorie{font-size:13px;background:#fef3c7;border:2px dashed #064e3b;border-radius:10px;padding:8px 14px}
+.actions{display:flex;gap:8px;width:100%;justify-content:center}
+.actions button{background:#10b981;color:#fff;border:3px solid #064e3b;padding:12px 22px;font-family:"Mochiy Pop P One",sans-serif;font-size:14px;border-radius:999px;cursor:pointer;box-shadow:3px 3px 0 #064e3b}
+.actions button:active{transform:translate(2px,2px);box-shadow:1px 1px 0 #064e3b}
+.actions .reset{background:#fff;color:#064e3b}
+.note{font-size:9px;text-align:center;opacity:.8;line-height:1.5}
+.err{padding:10px;background:rgba(255,0,0,.15);border:2px solid #f55;border-radius:10px;font-size:12px;display:none}
+.err.show{display:block}
+</style>
+</head>
+<body>
+<div id="app">
+<h1 class="title">歩数チャレンジ 🚶</h1>
+<div class="big-card">
+  <div class="steps"><span id="cnt">0</span><small>歩</small></div>
+  <div class="bar"><div class="bar-fill" id="fill"></div><div class="bar-text" id="pct">0%</div></div>
+  <div class="goal-row" id="goals">
+    <button data-g="3000">3000歩</button>
+    <button data-g="5000" class="on">5000歩</button>
+    <button data-g="8000">8000歩</button>
+    <button data-g="10000">10000歩</button>
+  </div>
+  <div class="calorie" id="cal">🔥 0 kcal / 距離 0 m</div>
+</div>
+<div class="actions">
+  <button id="btn-start">▶ スタート</button>
+  <button id="btn-reset" class="reset">↺ リセット</button>
+</div>
+<div class="note">スマホを持って歩くとカウント<br/>※端末のセンサー使用・送信なし</div>
+<div class="err" id="err"></div>
+</div>
+<script>
+(()=>{
+'use strict';
+const KEY='hosuu_jp_v1';
+const $=(id)=>document.getElementById(id);
+let count=parseInt(localStorage.getItem(KEY)||'0',10);
+let goal=5000,running=false;
+let lastMag=0,lastStep=0;
+function render(){
+  $('cnt').textContent=count.toLocaleString();
+  const pct=Math.min(100,Math.round(count/goal*100));
+  $('fill').style.width=pct+'%';$('pct').textContent=pct+'%';
+  const cal=Math.round(count*0.04);
+  const dist=Math.round(count*0.7);
+  $('cal').textContent=`🔥 ${cal} kcal / 距離 ${dist.toLocaleString()} m`;
+  if(count>=goal && !window._cheered){window._cheered=true;fanfare()}
+}
+function step(){count++;localStorage.setItem(KEY,String(count));render();beep(660,.04)}
+function onMotion(e){
+  if(!running)return;
+  const a=e.accelerationIncludingGravity;if(!a)return;
+  const m=Math.hypot(a.x||0,a.y||0,a.z||0);
+  const delta=Math.abs(m-lastMag);
+  const now=Date.now();
+  if(delta>3 && m>11 && now-lastStep>320){lastStep=now;step()}
+  lastMag=m;
+}
+async function start(){
+  if(typeof DeviceMotionEvent.requestPermission==='function'){
+    try{const s=await DeviceMotionEvent.requestPermission();if(s!=='granted'){$('err').textContent='センサー許可が必要です';$('err').classList.add('show');return}}catch(e){}
+  }
+  running=!running;
+  $('btn-start').textContent=running?'⏸ 停止':'▶ スタート';
+  if(running)beep(880,.1);
+}
+let ac=null;const en=()=>{if(!ac)ac=new(window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();return ac};
+const beep=(f,d,t='triangle',g=.06)=>{const a=en();const o=a.createOscillator();const gn=a.createGain();o.type=t;o.frequency.value=f;gn.gain.value=g;gn.gain.exponentialRampToValueAtTime(.0001,a.currentTime+d);o.connect(gn).connect(a.destination);o.start();o.stop(a.currentTime+d)};
+const fanfare=()=>{[523,659,784,1047,1318].forEach((f,i)=>setTimeout(()=>beep(f,.18,'triangle',.18),i*100))};
+window.addEventListener('devicemotion',onMotion);
+$('btn-start').addEventListener('click',()=>{en();start()});
+$('btn-reset').addEventListener('click',()=>{count=0;window._cheered=false;localStorage.setItem(KEY,'0');render()});
+document.querySelectorAll('#goals button').forEach(b=>b.addEventListener('click',()=>{
+  goal=parseInt(b.dataset.g);
+  document.querySelectorAll('#goals button').forEach(x=>x.classList.toggle('on',x===b));render()}));
+render();
+})();
+</script>
+</body>
+</html>
